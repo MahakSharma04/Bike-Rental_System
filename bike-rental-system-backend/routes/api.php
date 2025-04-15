@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\BikeController;
+use App\Http\Controllers\API\ReservationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,7 +27,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/bikes/available', [BikeController::class, 'available']);
     Route::get('/bikes/types', [BikeController::class, 'types']);
     Route::post('/bikes/{bike}/images', [BikeController::class, 'uploadImages']);
-    Route::apiResource('bikes', BikeController::class);
+    
+    // Individual bike routes
+    Route::get('/bikes', [BikeController::class, 'index'])->middleware('admin');
+    Route::post('/bikes', [BikeController::class, 'store']);
+    Route::get('/bikes/{bike}', [BikeController::class, 'show']);
+    Route::put('/bikes/{bike}', [BikeController::class, 'update']);
+    Route::delete('/bikes/{bike}', [BikeController::class, 'destroy']);
+    
+    // Reservation routes
+    Route::get('/reservations', [ReservationController::class, 'index']);
+    Route::post('/reservations', [ReservationController::class, 'store']);
+    Route::get('/reservations/{reservation}', [ReservationController::class, 'show']);
+    Route::put('/reservations/{reservation}', [ReservationController::class, 'update']);
+    Route::delete('/reservations/{reservation}', [ReservationController::class, 'destroy']);
+    Route::put('/reservations/{reservation}/status', [ReservationController::class, 'updateStatus']);
 
     
 });
