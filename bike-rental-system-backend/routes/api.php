@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\BikeController;
+use App\Http\Controllers\API\PaymentController;
 use App\Http\Controllers\API\ReservationController;
 use Illuminate\Support\Facades\Route;
 
@@ -14,6 +15,13 @@ use Illuminate\Support\Facades\Route;
 // Public authentication routes
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
+
+// Public payment routes
+Route::get('/payment-view/{reservationId}', [PaymentController::class, 'getReservationPayment'])
+    ->name('payment.view')
+    ->middleware('signed');
+
+Route::post('/payments', [PaymentController::class, 'store']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -42,6 +50,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/reservations/{reservation}', [ReservationController::class, 'update']);
     Route::delete('/reservations/{reservation}', [ReservationController::class, 'destroy']);
     Route::put('/reservations/{reservation}/status', [ReservationController::class, 'updateStatus']);
-
     
+    // Payment routes
+    Route::get('/payments', [PaymentController::class, 'index']);
+    Route::get('/get-payment-link/{reservationId}', [PaymentController::class, 'getPaymentViewLink']);
 });
