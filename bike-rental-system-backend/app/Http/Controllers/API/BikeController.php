@@ -7,6 +7,8 @@ use App\Models\Bike;
 use App\Models\Reservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
 
 class BikeController extends Controller
 {
@@ -70,7 +72,7 @@ class BikeController extends Controller
     public function store(Request $request)
     {
         // Check if user is admin
-        if (!$request->user()->isAdmin()) {
+        if (!Auth::user() || Auth::user()->user_type !== 'admin') {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized. Only admins can create bikes'
@@ -84,7 +86,7 @@ class BikeController extends Controller
             'hourly_rate' => 'required|numeric|min:0',
             'daily_rate' => 'required|numeric|min:0',
             'images' => 'nullable|array',
-            'images.*' => 'string|url',
+            'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
         ]);
 
         if ($validator->fails()) {
@@ -95,6 +97,7 @@ class BikeController extends Controller
             ], 422);
         }
 
+        // Create bike with basic info
         $bike = Bike::create([
             'model' => $request->model,
             'brand' => $request->brand,
@@ -102,8 +105,21 @@ class BikeController extends Controller
             'status' => 'available',
             'hourly_rate' => $request->hourly_rate,
             'daily_rate' => $request->daily_rate,
-            'images' => $request->images ?? [],
+            'images' => [],
         ]);
+
+        // Process images if provided
+        if ($request->hasFile('images')) {
+            $uploadedImages = [];
+            
+            foreach ($request->file('images') as $image) {
+                $path = $image->store('bikes', 'public');
+                $uploadedImages[] = $path;
+            }
+            
+            $bike->images = $uploadedImages;
+            $bike->save();
+        }
 
         return response()->json([
             'status' => true,
@@ -121,7 +137,7 @@ class BikeController extends Controller
     public function show(Bike $bike)
     {
         // Load maintenance records if user is admin
-        if (auth()->user() && auth()->user()->isAdmin()) {
+        if (Auth::user() && Auth::user()->user_type === 'admin') {
             $bike->load('maintenanceRecords');
         }
         
@@ -142,7 +158,7 @@ class BikeController extends Controller
     public function update(Request $request, Bike $bike)
     {
         // Check if user is admin
-        if (!$request->user()->isAdmin()) {
+        if (!Auth::user() || Auth::user()->user_type !== 'admin') {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized. Only admins can update bikes'
@@ -158,7 +174,8 @@ class BikeController extends Controller
             'hourly_rate' => 'sometimes|numeric|min:0',
             'daily_rate' => 'sometimes|numeric|min:0',
             'images' => 'nullable|array',
-            'images.*' => 'string|url',
+            'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
+            'replace_images' => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -169,7 +186,37 @@ class BikeController extends Controller
             ], 422);
         }
 
-        $bike->update($request->all());
+        // Update bike info excluding images
+        $bike->update($request->except('images', 'replace_images'));
+
+        // Process images if provided
+        if ($request->hasFile('images')) {
+            $uploadedImages = [];
+            
+            foreach ($request->file('images') as $image) {
+                $path = $image->store('bikes', 'public');
+                $uploadedImages[] = $path;
+            }
+            
+            // Replace or merge images
+            if ($request->input('replace_images', false)) {
+                // Delete old image files
+                if (!empty($bike->images)) {
+                    foreach ($bike->images as $oldImage) {
+                        if (Storage::disk('public')->exists($oldImage)) {
+                            Storage::disk('public')->delete($oldImage);
+                        }
+                    }
+                }
+                
+                $bike->images = $uploadedImages;
+            } else {
+                $currentImages = $bike->images ?? [];
+                $bike->images = array_merge($currentImages, $uploadedImages);
+            }
+            
+            $bike->save();
+        }
 
         return response()->json([
             'status' => true,
@@ -188,7 +235,7 @@ class BikeController extends Controller
     public function destroy(Request $request, Bike $bike)
     {
         // Check if user is admin
-        if (!$request->user()->isAdmin()) {
+        if (!Auth::user() || Auth::user()->user_type !== 'admin') {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized. Only admins can delete bikes'
@@ -300,7 +347,7 @@ class BikeController extends Controller
     public function uploadImages(Request $request, Bike $bike)
     {
         // Check if user is admin
-        if (!$request->user()->isAdmin()) {
+        if (!Auth::user() || Auth::user()->user_type !== 'admin') {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized. Only admins can upload bike images'
@@ -309,7 +356,7 @@ class BikeController extends Controller
 
         $validator = Validator::make($request->all(), [
             'images' => 'required|array',
-            'images.*' => 'required|string|url',
+            'images.*' => 'image|mimes:jpeg,png,jpg|max:2048',
         ]);
 
         if ($validator->fails()) {
@@ -322,12 +369,19 @@ class BikeController extends Controller
 
         // Get current images or initialize empty array
         $currentImages = $bike->images ?? [];
+        $uploadedImages = [];
         
-        // Add new images
-        $newImages = array_merge($currentImages, $request->images);
+        // Process and store each image
+        foreach ($request->file('images') as $image) {
+            $path = $image->store('bikes', 'public');
+            $uploadedImages[] = $path;
+        }
+        
+        // Merge with existing images
+        $allImages = array_merge($currentImages, $uploadedImages);
         
         // Update bike with new images
-        $bike->images = $newImages;
+        $bike->images = $allImages;
         $bike->save();
 
         return response()->json([

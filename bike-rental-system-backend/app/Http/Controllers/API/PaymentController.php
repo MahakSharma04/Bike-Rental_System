@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\URL;
 use Razorpay\Api\Api;
 use Exception;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class PaymentController extends Controller
 {
@@ -23,11 +24,11 @@ class PaymentController extends Controller
      */
     public function index(Request $request)
     {
-        $user = $request->user();
+        $user = Auth::user();
         $query = Payment::with(['reservation', 'reservation.bike']);
         
-        // If not admin, only show user's own payments
-        if (!$user->isAdmin()) {
+        // Include all payments for admin, only user's payments for regular users
+        if ($user->user_type !== 'admin') {
             $query->where('user_id', $user->id);
         }
         
@@ -89,11 +90,11 @@ class PaymentController extends Controller
      */
     public function show(Request $request, Payment $payment)
     {
-        // Check if user is authorized to view this payment
-        if (!$request->user()->isAdmin() && $request->user()->id !== $payment->user_id) {
+        // Only allow access for admin or the payment's owner
+        if ($request->user()->user_type !== 'admin' && $request->user()->id !== $payment->user_id) {
             return response()->json([
                 'status' => false,
-                'message' => 'Unauthorized. You can only view your own payments'
+                'message' => 'Unauthorized. You can only view your own payments.'
             ], 403);
         }
         
@@ -116,16 +117,16 @@ class PaymentController extends Controller
      */
     public function getPaymentViewLink(Request $request, $reservationId)
     {
-        $user = $request->user();
+        $user = Auth::user();
         
         // Find the reservation
         $reservation = Reservation::findOrFail($reservationId);
         
-        // Check if user is authorized to generate payment link for this reservation
-        if (!$user->isAdmin() && $user->id !== $reservation->user_id) {
+        // Only allow link generation for admin or the reservation's owner
+        if ($user->user_type !== 'admin' && $user->id !== $reservation->user_id) {
             return response()->json([
                 'status' => false,
-                'message' => 'Unauthorized. You can only generate payment links for your own reservations'
+                'message' => 'Unauthorized. You can only generate payment links for your own reservations.'
             ], 403);
         }
         

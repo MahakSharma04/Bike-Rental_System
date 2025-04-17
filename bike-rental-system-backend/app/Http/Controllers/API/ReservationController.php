@@ -7,6 +7,7 @@ use App\Models\Bike;
 use App\Models\Reservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 
 class ReservationController extends Controller
 {
@@ -19,11 +20,11 @@ class ReservationController extends Controller
      */
     public function index(Request $request)
     {
-        $user = $request->user();
+        $user = Auth::user();
         $query = Reservation::with('bike');
         
         // If not admin, only show user's own reservations
-        if (!$user->isAdmin()) {
+        if ($user->user_type !== 'admin') {
             $query->where('user_id', $user->id);
         }
         
@@ -162,7 +163,7 @@ class ReservationController extends Controller
     public function show(Request $request, Reservation $reservation)
     {
         // Check if user is authorized to view this reservation
-        if (!$request->user()->isAdmin() && $request->user()->id !== $reservation->user_id) {
+        if ($request->user()->user_type !== 'admin' && $request->user()->id !== $reservation->user_id) {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized. You can only view your own reservations'
@@ -189,19 +190,19 @@ class ReservationController extends Controller
     public function update(Request $request, Reservation $reservation)
     {
         // Check if user is authorized to update this reservation
-        if (!$request->user()->isAdmin() && $request->user()->id !== $reservation->user_id) {
+        if ($request->user()->user_type !== 'admin' && $request->user()->id !== $reservation->user_id) {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized. You can only update your own reservations'
             ], 403);
         }
         
-        // Only allow updates if reservation is still pending
-        if ($reservation->status !== 'pending' && !$request->user()->isAdmin()) {
+        // Regular users can only update pending reservations
+        if ($reservation->status !== 'pending' && $request->user()->user_type !== 'admin') {
             return response()->json([
                 'status' => false,
-                'message' => 'Cannot update. Reservation is already ' . $reservation->status
-            ], 422);
+                'message' => 'Only pending reservations can be updated by regular users'
+            ], 403);
         }
         
         $validator = Validator::make($request->all(), [
@@ -293,7 +294,7 @@ class ReservationController extends Controller
     public function destroy(Request $request, Reservation $reservation)
     {
         // Check if user is authorized to cancel this reservation
-        if (!$request->user()->isAdmin() && $request->user()->id !== $reservation->user_id) {
+        if ($request->user()->user_type !== 'admin' && $request->user()->id !== $reservation->user_id) {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized. You can only cancel your own reservations'
@@ -328,7 +329,7 @@ class ReservationController extends Controller
     public function updateStatus(Request $request, Reservation $reservation)
     {
         // Check if user is admin
-        if (!$request->user()->isAdmin()) {
+        if ($request->user()->user_type !== 'admin') {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized. Only admins can update reservation status'

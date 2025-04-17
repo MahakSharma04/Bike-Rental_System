@@ -5,6 +5,7 @@ use App\Http\Controllers\API\BikeController;
 use App\Http\Controllers\API\PaymentController;
 use App\Http\Controllers\API\ReservationController;
 use App\Http\Controllers\API\MaintenanceController;
+use App\Http\Controllers\API\DamageReportController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -65,4 +66,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/maintenance/{id}', [MaintenanceController::class, 'update']);
         Route::put('/maintenance/{id}/complete', [MaintenanceController::class, 'complete']);
     });
+    
+    // Damage Reports routes
+    Route::get('/damages', [DamageReportController::class, 'index'])->middleware('admin');
+    Route::get('/damages/{id}', [DamageReportController::class, 'show']);
+    Route::post('/damages', [DamageReportController::class, 'store']);
+    Route::put('/damages/{id}', [DamageReportController::class, 'update'])->middleware('admin');
+    Route::post('/damages/{id}/images', [DamageReportController::class, 'uploadImages']);
 });
