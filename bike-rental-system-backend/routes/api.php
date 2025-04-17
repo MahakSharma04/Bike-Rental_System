@@ -4,6 +4,7 @@ use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\BikeController;
 use App\Http\Controllers\API\PaymentController;
 use App\Http\Controllers\API\ReservationController;
+use App\Http\Controllers\API\MaintenanceController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -54,4 +55,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Payment routes
     Route::get('/payments', [PaymentController::class, 'index']);
     Route::get('/get-payment-link/{reservationId}', [PaymentController::class, 'getPaymentViewLink']);
+    
+    // Maintenance routes - admin only
+    Route::middleware('admin')->group(function () {
+        Route::get('/maintenance', [MaintenanceController::class, 'index']);
+        Route::get('/maintenance/scheduled', [MaintenanceController::class, 'scheduled']);
+        Route::get('/maintenance/{id}', [MaintenanceController::class, 'show']);
+        Route::post('/maintenance', [MaintenanceController::class, 'store']);
+        Route::put('/maintenance/{id}', [MaintenanceController::class, 'update']);
+        Route::put('/maintenance/{id}/complete', [MaintenanceController::class, 'complete']);
+    });
 });

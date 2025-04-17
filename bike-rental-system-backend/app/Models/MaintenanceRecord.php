@@ -16,10 +16,12 @@ class MaintenanceRecord extends Model
      */
     protected $fillable = [
         'bike_id',
+        'maintenance_type',
         'description',
-        'maintenance_date',
         'cost',
-        'performed_by'
+        'scheduled_date',
+        'completion_date',
+        'status'
     ];
 
     /**
@@ -28,7 +30,8 @@ class MaintenanceRecord extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'maintenance_date' => 'datetime',
+        'scheduled_date' => 'date',
+        'completion_date' => 'date',
         'cost' => 'decimal:2'
     ];
 
