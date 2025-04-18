@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DamageReport;
 use App\Models\Reservation;
 use App\Models\Bike;
+use App\Models\BikeInventory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -29,7 +30,7 @@ class DamageReportController extends Controller
             ], 403);
         }
 
-        $query = DamageReport::with(['bike', 'reservation', 'reporter']);
+        $query = DamageReport::with(['bikeInventory', 'bikeInventory.bike', 'reservation', 'reporter']);
         
         // Filter by status if provided
         if ($request->has('status')) {
@@ -39,6 +40,18 @@ class DamageReportController extends Controller
         // Filter by severity if provided
         if ($request->has('severity')) {
             $query->where('severity', $request->severity);
+        }
+        
+        // Filter by bike_id if provided
+        if ($request->has('bike_id')) {
+            $query->whereHas('bikeInventory', function($q) use ($request) {
+                $q->where('bike_id', $request->bike_id);
+            });
+        }
+        
+        // Filter by bike_inventory_id if provided
+        if ($request->has('bike_inventory_id')) {
+            $query->where('bike_inventory_id', $request->bike_inventory_id);
         }
         
         $damageReports = $query->latest()->get();
@@ -58,7 +71,7 @@ class DamageReportController extends Controller
      */
     public function show($id)
     {
-        $damageReport = DamageReport::with(['bike', 'reservation', 'reporter'])->find($id);
+        $damageReport = DamageReport::with(['bikeInventory', 'bikeInventory.bike', 'reservation', 'reporter'])->find($id);
         
         if (!$damageReport) {
             return response()->json([
@@ -93,7 +106,7 @@ class DamageReportController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'reservation_id' => 'required|exists:reservations,id',
-            'bike_id' => 'required|exists:bikes,id',
+            'bike_inventory_id' => 'required|exists:bike_inventories,id',
             'description' => 'required|string',
             'severity' => 'required|in:minor,moderate,severe',
             'images' => 'nullable|array',
@@ -126,18 +139,18 @@ class DamageReportController extends Controller
             ], 403);
         }
         
-        // Check if bike_id matches the reservation's bike_id
-        if ($reservation->bike_id != $request->bike_id) {
+        // Check if bike_inventory_id matches the reservation's bike_inventory_id
+        if ($reservation->bike_inventory_id != $request->bike_inventory_id) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'The bike ID does not match the reservation\'s bike.'
+                'message' => 'The bike inventory ID does not match the reservation\'s bike.'
             ], 422);
         }
         
         // Create the damage report
         $damageReport = new DamageReport([
             'reservation_id' => $request->reservation_id,
-            'bike_id' => $request->bike_id,
+            'bike_inventory_id' => $request->bike_inventory_id,
             'reported_by' => Auth::id(),
             'description' => $request->description,
             'severity' => $request->severity,
@@ -147,10 +160,22 @@ class DamageReportController extends Controller
         
         $damageReport->save();
         
+        // Update bike inventory status if damage is moderate or severe
+        if (in_array($request->severity, ['moderate', 'severe'])) {
+            $bikeInventory = BikeInventory::find($request->bike_inventory_id);
+            if ($bikeInventory) {
+                $bikeInventory->status = 'damaged';
+                $bikeInventory->save();
+            }
+        }
+        
         // Handle image uploads separately
         if ($request->hasFile('images')) {
             $this->uploadImages($request, $damageReport);
         }
+        
+        // Load relationships for response
+        $damageReport->load(['bikeInventory', 'bikeInventory.bike', 'reservation', 'reporter']);
         
         return response()->json([
             'status' => 'success',
@@ -201,22 +226,33 @@ class DamageReportController extends Controller
             ], 422);
         }
         
-        // Update the damage report
-        $damageReport->update($request->only([
-            'description',
-            'severity',
-            'status',
-            'additional_charges'
-        ]));
+        // Get the old status and severity before updating
+        $oldStatus = $damageReport->status;
+        $oldSeverity = $damageReport->severity;
         
-        // If status changed to "repaired", update the bike's status if needed
-        if ($request->has('status') && $request->status === 'repaired') {
-            $bike = Bike::find($damageReport->bike_id);
-            if ($bike && $bike->status === 'damaged') {
-                $bike->status = 'available';
-                $bike->save();
+        // Update the damage report
+        $damageReport->update($request->all());
+        
+        // If status is changed to 'repaired', update bike inventory status
+        if ($request->has('status') && $request->status === 'repaired' && $oldStatus !== 'repaired') {
+            $bikeInventory = BikeInventory::find($damageReport->bike_inventory_id);
+            if ($bikeInventory && $bikeInventory->status === 'damaged') {
+                $bikeInventory->status = 'available';
+                $bikeInventory->save();
             }
         }
+        
+        // If severity is upgraded to moderate or severe, update bike inventory status
+        if ($request->has('severity') && in_array($request->severity, ['moderate', 'severe']) && !in_array($oldSeverity, ['moderate', 'severe'])) {
+            $bikeInventory = BikeInventory::find($damageReport->bike_inventory_id);
+            if ($bikeInventory && $bikeInventory->status !== 'damaged') {
+                $bikeInventory->status = 'damaged';
+                $bikeInventory->save();
+            }
+        }
+        
+        // Load relationships for response
+        $damageReport->load(['bikeInventory', 'bikeInventory.bike', 'reservation', 'reporter']);
         
         return response()->json([
             'status' => 'success',

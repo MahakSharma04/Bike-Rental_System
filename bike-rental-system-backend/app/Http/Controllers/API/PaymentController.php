@@ -29,7 +29,9 @@ class PaymentController extends Controller
         
         // Include all payments for admin, only user's payments for regular users
         if ($user->user_type !== 'admin') {
-            $query->where('user_id', $user->id);
+            $query->whereHas('reservation', function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            });
         }
         
         // Apply filters if provided
@@ -90,8 +92,11 @@ class PaymentController extends Controller
      */
     public function show(Request $request, Payment $payment)
     {
+        // Load reservation to check ownership
+        $payment->load('reservation');
+        
         // Only allow access for admin or the payment's owner
-        if ($request->user()->user_type !== 'admin' && $request->user()->id !== $payment->user_id) {
+        if ($request->user()->user_type !== 'admin' && $request->user()->id !== $payment->reservation->user_id) {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized. You can only view your own payments.'
@@ -99,7 +104,7 @@ class PaymentController extends Controller
         }
         
         // Load relationships
-        $payment->load(['reservation', 'reservation.bike', 'user']);
+        $payment->load(['reservation.bike', 'reservation.user']);
         
         return response()->json([
             'status' => true,
@@ -296,4 +301,4 @@ class PaymentController extends Controller
             ]);
         }
     }
-} 
+}

@@ -16,7 +16,7 @@ class Reservation extends Model
      */
     protected $fillable = [
         'user_id',
-        'bike_id',
+        'bike_inventory_id',
         'start_datetime',
         'end_datetime',
         'pay_amount',
@@ -35,11 +35,19 @@ class Reservation extends Model
     ];
 
     /**
-     * Get the bike that is reserved.
+     * Get the bike inventory item that is reserved.
+     */
+    public function bikeInventory()
+    {
+        return $this->belongsTo(BikeInventory::class);
+    }
+
+    /**
+     * Get the bike model through the inventory item.
      */
     public function bike()
     {
-        return $this->belongsTo(Bike::class);
+        return $this->hasOneThrough(Bike::class, BikeInventory::class, 'id', 'id', 'bike_inventory_id', 'bike_id');
     }
 
     /**

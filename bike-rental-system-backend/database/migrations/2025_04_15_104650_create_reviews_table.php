@@ -12,8 +12,11 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('bike_id')->constrained()->onDelete('cascade');
+            $table->foreignId('bike_inventory_id')->constrained()->onDelete('cascade');
             $table->foreignId('reservation_id')->constrained()->onDelete('cascade');
             $table->integer('rating')->unsigned()->comment('Rating from 1 to 5');
+            $table->string('title')->nullable();
+            $table->text('comment')->nullable();
             $table->timestamps();
         });
     }

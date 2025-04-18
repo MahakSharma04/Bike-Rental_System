@@ -15,7 +15,6 @@ class Payment extends Model
      * @var array<string>
      */
     protected $fillable = [
-        'user_id',
         'reservation_id',
         'amount',
         'payment_method',
@@ -41,13 +40,5 @@ class Payment extends Model
     public function reservation()
     {
         return $this->belongsTo(Reservation::class);
-    }
-
-    /**
-     * Get the user who made the payment.
-     */
-    public function user()
-    {
-        return $this->belongsTo(User::class);
     }
 } 

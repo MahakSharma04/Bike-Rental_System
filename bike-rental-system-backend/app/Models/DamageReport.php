@@ -16,7 +16,7 @@ class DamageReport extends Model
      */
     protected $fillable = [
         'reservation_id',
-        'bike_id',
+        'bike_inventory_id',
         'reported_by',
         'description',
         'images',
@@ -44,11 +44,19 @@ class DamageReport extends Model
     }
 
     /**
-     * Get the bike associated with the damage report.
+     * Get the bike inventory item associated with the damage report.
+     */
+    public function bikeInventory()
+    {
+        return $this->belongsTo(BikeInventory::class);
+    }
+
+    /**
+     * Get the bike model through the inventory item.
      */
     public function bike()
     {
-        return $this->belongsTo(Bike::class);
+        return $this->hasOneThrough(Bike::class, BikeInventory::class, 'id', 'id', 'bike_inventory_id', 'bike_id');
     }
 
     /**

@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('maintenance_records', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('bike_id')->constrained()->onDelete('cascade');
+            $table->foreignId('bike_inventory_id')->constrained()->onDelete('cascade');
             $table->enum('maintenance_type', ['routine', 'repair']);
             $table->text('description');
             $table->decimal('cost', 10, 2)->default(0);

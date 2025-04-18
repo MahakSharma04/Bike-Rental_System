@@ -18,11 +18,10 @@ class Bike extends Model
         'model',
         'brand',
         'type',
-        'status',
+        'description',
         'hourly_rate',
         'daily_rate',
-        'images',
-        'last_maintenance_date'
+        'images'
     ];
 
     /**
@@ -34,22 +33,37 @@ class Bike extends Model
         'images' => 'array',
         'hourly_rate' => 'decimal:2',
         'daily_rate' => 'decimal:2',
-        'last_maintenance_date' => 'datetime',
     ];
 
     /**
-     * Get the maintenance records for the bike.
+     * Get the inventory items for this bike model.
      */
-    public function maintenanceRecords()
+    public function inventoryItems()
     {
-        return $this->hasMany(MaintenanceRecord::class);
+        return $this->hasMany(BikeInventory::class);
     }
 
     /**
-     * Get the reservations for the bike.
+     * Get the maintenance records for all inventory items of this bike model.
+     */
+    public function maintenanceRecords()
+    {
+        return $this->hasManyThrough(MaintenanceRecord::class, BikeInventory::class);
+    }
+
+    /**
+     * Get the reservations for all inventory items of this bike model.
      */
     public function reservations()
     {
-        return $this->hasMany(Reservation::class);
+        return $this->hasManyThrough(Reservation::class, BikeInventory::class);
+    }
+
+    /**
+     * Get available inventory items for this bike model.
+     */
+    public function availableInventoryItems()
+    {
+        return $this->inventoryItems()->where('status', 'available');
     }
 } 

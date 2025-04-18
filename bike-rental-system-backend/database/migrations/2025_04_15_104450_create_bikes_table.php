@@ -13,8 +13,7 @@ return new class extends Migration
             $table->string('model');
             $table->string('brand');
             $table->string('type');
-            $table->enum('status', ['available', 'rented', 'maintenance', 'damaged'])->default('available');
-            $table->date('last_maintenance_date')->nullable();
+            $table->text('description')->nullable();
             $table->decimal('hourly_rate', 8, 2);
             $table->decimal('daily_rate', 8, 2);
             $table->json('images')->nullable();

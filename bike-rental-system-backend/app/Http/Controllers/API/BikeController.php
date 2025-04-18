@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Bike;
+use App\Models\BikeInventory;
 use App\Models\Reservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -23,10 +24,6 @@ class BikeController extends Controller
         $query = Bike::query();
         
         // Apply filters if provided
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
-        
         if ($request->has('type')) {
             $query->where('type', $request->type);
         }
@@ -83,6 +80,7 @@ class BikeController extends Controller
             'model' => 'required|string|max:255',
             'brand' => 'required|string|max:255',
             'type' => 'required|string|max:255',
+            'description' => 'nullable|string',
             'hourly_rate' => 'required|numeric|min:0',
             'daily_rate' => 'required|numeric|min:0',
             'images' => 'nullable|array',
@@ -102,7 +100,7 @@ class BikeController extends Controller
             'model' => $request->model,
             'brand' => $request->brand,
             'type' => $request->type,
-            'status' => 'available',
+            'description' => $request->description,
             'hourly_rate' => $request->hourly_rate,
             'daily_rate' => $request->daily_rate,
             'images' => [],
@@ -136,9 +134,14 @@ class BikeController extends Controller
      */
     public function show(Bike $bike)
     {
-        // Load maintenance records if user is admin
+        // Load inventory items and maintenance records if user is admin
         if (Auth::user() && Auth::user()->user_type === 'admin') {
-            $bike->load('maintenanceRecords');
+            $bike->load(['inventoryItems', 'maintenanceRecords']);
+        } else {
+            // For regular users, only load available inventory items
+            $bike->load(['inventoryItems' => function($query) {
+                $query->where('status', 'available');
+            }]);
         }
         
         return response()->json([
@@ -169,8 +172,7 @@ class BikeController extends Controller
             'model' => 'sometimes|string|max:255',
             'brand' => 'sometimes|string|max:255',
             'type' => 'sometimes|string|max:255',
-            'status' => 'sometimes|in:available,rented,maintenance,damaged',
-            'last_maintenance_date' => 'nullable|date',
+            'description' => 'nullable|string',
             'hourly_rate' => 'sometimes|numeric|min:0',
             'daily_rate' => 'sometimes|numeric|min:0',
             'images' => 'nullable|array',
@@ -198,26 +200,24 @@ class BikeController extends Controller
                 $uploadedImages[] = $path;
             }
             
-            // Replace or merge images
+            // Replace or append images based on request
             if ($request->input('replace_images', false)) {
-                // Delete old image files
+                // Delete old images
                 if (!empty($bike->images)) {
                     foreach ($bike->images as $oldImage) {
-                        if (Storage::disk('public')->exists($oldImage)) {
-                            Storage::disk('public')->delete($oldImage);
-                        }
+                        Storage::disk('public')->delete($oldImage);
                     }
                 }
-                
                 $bike->images = $uploadedImages;
             } else {
+                // Append new images
                 $currentImages = $bike->images ?? [];
                 $bike->images = array_merge($currentImages, $uploadedImages);
             }
             
             $bike->save();
         }
-
+        
         return response()->json([
             'status' => true,
             'message' => 'Bike updated successfully',
@@ -263,7 +263,7 @@ class BikeController extends Controller
     }
 
     /**
-     * Get available bikes for a specific date range
+     * Available bikes endpoint with inventory check
      *
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
@@ -271,8 +271,10 @@ class BikeController extends Controller
     public function available(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'start_datetime' => 'required|date',
+            'start_datetime' => 'required|date|after_or_equal:today',
             'end_datetime' => 'required|date|after:start_datetime',
+            'type' => 'nullable|string',
+            'brand' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -282,28 +284,26 @@ class BikeController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
-
-        // Get all bikes that are available
-        $query = Bike::where('status', 'available');
         
-        // Exclude bikes that have reservations in the requested period
-        $unavailableBikeIds = Reservation::where(function($q) use ($request) {
-                $q->whereBetween('start_datetime', [$request->start_datetime, $request->end_datetime])
-                  ->orWhereBetween('end_datetime', [$request->start_datetime, $request->end_datetime])
-                  ->orWhere(function($q) use ($request) {
-                      $q->where('start_datetime', '<=', $request->start_datetime)
-                        ->where('end_datetime', '>=', $request->end_datetime);
-                  });
-            })
-            ->whereIn('status', ['pending', 'confirmed'])
-            ->pluck('bike_id')
-            ->toArray();
-            
-        if (!empty($unavailableBikeIds)) {
-            $query->whereNotIn('id', $unavailableBikeIds);
-        }
+        $startDateTime = $request->start_datetime;
+        $endDateTime = $request->end_datetime;
         
-        // Apply additional filters if provided
+        // Query bikes that have available inventory items for the requested dates
+        $query = Bike::whereHas('inventoryItems', function($query) use ($startDateTime, $endDateTime) {
+            $query->where('status', 'available')
+                ->whereDoesntHave('reservations', function($q) use ($startDateTime, $endDateTime) {
+                    $q->where(function($innerQ) use ($startDateTime, $endDateTime) {
+                        $innerQ->whereBetween('start_datetime', [$startDateTime, $endDateTime])
+                            ->orWhereBetween('end_datetime', [$startDateTime, $endDateTime])
+                            ->orWhere(function($deepQ) use ($startDateTime, $endDateTime) {
+                                $deepQ->where('start_datetime', '<=', $startDateTime)
+                                    ->where('end_datetime', '>=', $endDateTime);
+                            });
+                    })->whereIn('status', ['pending', 'confirmed']);
+                });
+        });
+        
+        // Apply filters if provided
         if ($request->has('type')) {
             $query->where('type', $request->type);
         }
@@ -312,12 +312,41 @@ class BikeController extends Controller
             $query->where('brand', $request->brand);
         }
         
-        $bikes = $query->paginate($request->input('per_page', 10));
+        // Load available inventory items for each bike
+        $bikes = $query->with(['inventoryItems' => function($query) use ($startDateTime, $endDateTime) {
+            $query->where('status', 'available')
+                ->whereDoesntHave('reservations', function($q) use ($startDateTime, $endDateTime) {
+                    $q->where(function($innerQ) use ($startDateTime, $endDateTime) {
+                        $innerQ->whereBetween('start_datetime', [$startDateTime, $endDateTime])
+                            ->orWhereBetween('end_datetime', [$startDateTime, $endDateTime])
+                            ->orWhere(function($deepQ) use ($startDateTime, $endDateTime) {
+                                $deepQ->where('start_datetime', '<=', $startDateTime)
+                                    ->where('end_datetime', '>=', $endDateTime);
+                            });
+                    })->whereIn('status', ['pending', 'confirmed']);
+                });
+        }])->get();
+        
+        // Convert to response format with available inventory items
+        $response = $bikes->map(function($bike) {
+            return [
+                'id' => $bike->id,
+                'model' => $bike->model,
+                'brand' => $bike->brand,
+                'type' => $bike->type,
+                'description' => $bike->description,
+                'hourly_rate' => $bike->hourly_rate,
+                'daily_rate' => $bike->daily_rate,
+                'images' => $bike->images,
+                'available_inventory' => $bike->inventoryItems,
+                'available_count' => count($bike->inventoryItems)
+            ];
+        });
         
         return response()->json([
             'status' => true,
             'message' => 'Available bikes retrieved successfully',
-            'data' => $bikes
+            'data' => $response
         ]);
     }
 

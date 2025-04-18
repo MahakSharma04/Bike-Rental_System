@@ -6,6 +6,8 @@ use App\Http\Controllers\API\PaymentController;
 use App\Http\Controllers\API\ReservationController;
 use App\Http\Controllers\API\MaintenanceController;
 use App\Http\Controllers\API\DamageReportController;
+use App\Http\Controllers\API\ReviewController;
+use App\Http\Controllers\API\BikeInventoryController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -45,6 +47,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/bikes/{bike}', [BikeController::class, 'update']);
     Route::delete('/bikes/{bike}', [BikeController::class, 'destroy']);
     
+    // Bike Inventory routes - admin only
+    Route::middleware('admin')->group(function () {
+        Route::get('/bike-inventory', [BikeInventoryController::class, 'index']);
+        Route::post('/bike-inventory', [BikeInventoryController::class, 'store']);
+        Route::get('/bike-inventory/{id}', [BikeInventoryController::class, 'show']);
+        Route::put('/bike-inventory/{id}', [BikeInventoryController::class, 'update']);
+        Route::delete('/bike-inventory/{id}', [BikeInventoryController::class, 'destroy']);
+    });
+    
+    // Public bike inventory route
+    Route::get('/bikes/{bikeId}/available-inventory', [BikeInventoryController::class, 'getAvailableByBike']);
+    
     // Reservation routes
     Route::get('/reservations', [ReservationController::class, 'index']);
     Route::post('/reservations', [ReservationController::class, 'store']);
@@ -73,4 +87,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/damages', [DamageReportController::class, 'store']);
     Route::put('/damages/{id}', [DamageReportController::class, 'update'])->middleware('admin');
     Route::post('/damages/{id}/images', [DamageReportController::class, 'uploadImages']);
+
+    // Review routes
+    Route::get('reviews', [ReviewController::class, 'index']);
+    Route::get('reviews/bikes/{bike_id}', [ReviewController::class, 'getByBike']);
+    Route::post('reviews', [ReviewController::class, 'store']);
+    Route::put('reviews/{id}', [ReviewController::class, 'update']);
+    Route::delete('reviews/{id}', [ReviewController::class, 'destroy']);
 });

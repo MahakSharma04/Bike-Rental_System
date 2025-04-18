@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('damage_reports', function (Blueprint $table) {
             $table->id();
             $table->foreignId('reservation_id')->constrained()->onDelete('cascade');
-            $table->foreignId('bike_id')->constrained()->onDelete('cascade');
+            $table->foreignId('bike_inventory_id')->constrained()->onDelete('cascade');
             $table->foreignId('reported_by')->constrained('users')->onDelete('cascade');
             $table->text('description');
             $table->json('images')->nullable();

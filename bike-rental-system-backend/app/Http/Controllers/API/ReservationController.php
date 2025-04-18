@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Bike;
+use App\Models\BikeInventory;
 use App\Models\Reservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -21,7 +22,7 @@ class ReservationController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $query = Reservation::with('bike');
+        $query = Reservation::with(['bikeInventory', 'bikeInventory.bike']);
         
         // If not admin, only show user's own reservations
         if ($user->user_type !== 'admin') {
@@ -42,7 +43,13 @@ class ReservationController extends Controller
         }
         
         if ($request->has('bike_id')) {
-            $query->where('bike_id', $request->bike_id);
+            $query->whereHas('bikeInventory', function($q) use ($request) {
+                $q->where('bike_id', $request->bike_id);
+            });
+        }
+        
+        if ($request->has('bike_inventory_id')) {
+            $query->where('bike_inventory_id', $request->bike_inventory_id);
         }
         
         // Sort options
@@ -74,7 +81,7 @@ class ReservationController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'bike_id' => 'required|exists:bikes,id',
+            'bike_inventory_id' => 'required|exists:bike_inventories,id',
             'start_datetime' => 'required|date|after_or_equal:today',
             'end_datetime' => 'required|date|after:start_datetime',
         ]);
@@ -87,10 +94,10 @@ class ReservationController extends Controller
             ], 422);
         }
         
-        // Check if bike is available for the requested period
-        $bike = Bike::findOrFail($request->bike_id);
+        // Check if bike inventory is available for the requested period
+        $bikeInventory = BikeInventory::with('bike')->findOrFail($request->bike_inventory_id);
         
-        if ($bike->status !== 'available') {
+        if ($bikeInventory->status !== 'available') {
             return response()->json([
                 'status' => false,
                 'message' => 'This bike is not available for reservation'
@@ -98,7 +105,7 @@ class ReservationController extends Controller
         }
         
         // Check for overlapping reservations
-        $overlappingReservations = Reservation::where('bike_id', $request->bike_id)
+        $overlappingReservations = Reservation::where('bike_inventory_id', $request->bike_inventory_id)
             ->where(function($query) use ($request) {
                 $query->whereBetween('start_datetime', [$request->start_datetime, $request->end_datetime])
                     ->orWhereBetween('end_datetime', [$request->start_datetime, $request->end_datetime])
@@ -126,6 +133,7 @@ class ReservationController extends Controller
         $totalDays = ceil($totalHours / 24);
         
         // Calculate price - use daily rate if more than 24 hours
+        $bike = $bikeInventory->bike;
         $payAmount = 0;
         if ($totalHours <= 24) {
             $payAmount = $bike->hourly_rate * $totalHours;
@@ -136,15 +144,15 @@ class ReservationController extends Controller
         // Create the reservation
         $reservation = Reservation::create([
             'user_id' => $request->user()->id,
-            'bike_id' => $request->bike_id,
+            'bike_inventory_id' => $request->bike_inventory_id,
             'start_datetime' => $request->start_datetime,
             'end_datetime' => $request->end_datetime,
             'pay_amount' => $payAmount,
             'status' => 'pending'
         ]);
         
-        // Load the bike relationship
-        $reservation->load('bike');
+        // Load the relationships
+        $reservation->load(['bikeInventory', 'bikeInventory.bike']);
         
         return response()->json([
             'status' => true,
@@ -171,7 +179,7 @@ class ReservationController extends Controller
         }
         
         // Load relationships
-        $reservation->load('bike', 'user');
+        $reservation->load(['bikeInventory', 'bikeInventory.bike', 'user']);
         
         return response()->json([
             'status' => true,
@@ -224,7 +232,7 @@ class ReservationController extends Controller
             $endDateTime = $request->end_datetime ?? $reservation->end_datetime;
             
             // Check for overlapping reservations
-            $overlappingReservations = Reservation::where('bike_id', $reservation->bike_id)
+            $overlappingReservations = Reservation::where('bike_inventory_id', $reservation->bike_inventory_id)
                 ->where('id', '!=', $reservation->id)
                 ->where(function($query) use ($startDateTime, $endDateTime) {
                     $query->whereBetween('start_datetime', [$startDateTime, $endDateTime])
@@ -245,7 +253,8 @@ class ReservationController extends Controller
             }
             
             // Recalculate payment if dates changed
-            $bike = $reservation->bike;
+            $bikeInventory = $reservation->bikeInventory;
+            $bike = $bikeInventory->bike;
             $startTime = new \DateTime($startDateTime);
             $endTime = new \DateTime($endDateTime);
             $interval = $startTime->diff($endTime);
@@ -275,7 +284,7 @@ class ReservationController extends Controller
         $reservation->save();
         
         // Load relationships
-        $reservation->load('bike');
+        $reservation->load(['bikeInventory', 'bikeInventory.bike']);
         
         return response()->json([
             'status' => true,
@@ -352,18 +361,18 @@ class ReservationController extends Controller
         $reservation->status = $request->status;
         $reservation->save();
         
-        // If status is confirmed, update bike status to rented
+        // If status is confirmed, update bike inventory status to rented
         if ($request->status === 'confirmed') {
-            $bike = $reservation->bike;
-            $bike->status = 'rented';
-            $bike->save();
+            $bikeInventory = $reservation->bikeInventory;
+            $bikeInventory->status = 'rented';
+            $bikeInventory->save();
         }
         
-        // If status is completed or cancelled, update bike status to available
+        // If status is completed or cancelled, update bike inventory status to available
         if (in_array($request->status, ['completed', 'cancelled', 'rejected'])) {
-            $bike = $reservation->bike;
-            $bike->status = 'available';
-            $bike->save();
+            $bikeInventory = $reservation->bikeInventory;
+            $bikeInventory->status = 'available';
+            $bikeInventory->save();
         }
         
         return response()->json([

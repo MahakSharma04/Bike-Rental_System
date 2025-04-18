@@ -15,7 +15,7 @@ class MaintenanceRecord extends Model
      * @var array<string>
      */
     protected $fillable = [
-        'bike_id',
+        'bike_inventory_id',
         'maintenance_type',
         'description',
         'cost',
@@ -36,10 +36,18 @@ class MaintenanceRecord extends Model
     ];
 
     /**
-     * Get the bike that owns the maintenance record.
+     * Get the bike inventory item that is being maintained.
+     */
+    public function bikeInventory()
+    {
+        return $this->belongsTo(BikeInventory::class);
+    }
+
+    /**
+     * Get the bike model through the inventory item.
      */
     public function bike()
     {
-        return $this->belongsTo(Bike::class);
+        return $this->hasOneThrough(Bike::class, BikeInventory::class, 'id', 'id', 'bike_inventory_id', 'bike_id');
     }
 } 
