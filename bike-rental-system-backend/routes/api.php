@@ -10,11 +10,7 @@ use App\Http\Controllers\API\ReviewController;
 use App\Http\Controllers\API\BikeInventoryController;
 use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-*/
+
 
 // Public authentication routes
 Route::post('/auth/register', [AuthController::class, 'register']);

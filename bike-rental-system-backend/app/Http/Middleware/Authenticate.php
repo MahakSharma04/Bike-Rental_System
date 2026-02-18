@@ -12,25 +12,15 @@ class Authenticate extends Middleware
      */
     protected function redirectTo(Request $request): ?string
     {
-        // Only redirect for web requests, not API requests
         if ($this->isApiRequest($request)) {
             return null; // No redirection for API requests
         }
         
         // For web requests, redirect to the appropriate login page
-        // If you have a frontend app, change this to that URL
         return '/login';
     }
     
-    /**
-     * Handle an unauthenticated request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  array  $guards
-     * @return void
-     *
-     * @throws \Illuminate\Auth\AuthenticationException
-     */
+    
     protected function unauthenticated($request, array $guards)
     {
         if ($this->isApiRequest($request)) {
@@ -44,12 +34,7 @@ class Authenticate extends Middleware
         parent::unauthenticated($request, $guards);
     }
     
-    /**
-     * Determine if the request is an API request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return bool
-     */
+    
     protected function isApiRequest(Request $request): bool
     {
         // Check multiple indicators that this is an API request

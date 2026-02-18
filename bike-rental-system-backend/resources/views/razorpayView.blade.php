@@ -58,7 +58,7 @@
                                  key: "rzp_test_wKSpsp0shnBr2a",
                                  amount: "{{ $amount }}",
                                  currency: "INR",
-                                 name: "Programming Solutions",
+                                 name: "Bike Rental",
                                  description: "Rozerpay",
                                  image: "https://cybercollege.info/wp-content/uploads/2021/06/cropped-logo.png",
                                  prefill: {
@@ -113,7 +113,7 @@
                                             
                                             if (jsonResponse.message === "Payment successful") {
                                                 // Simply redirect to home page or any specific URL
-                                                window.location.href = 'http://localhost:5173/login';  // Change this to your desired URL
+                                                window.location.href = 'http://localhost:5174/reservations';  // Change this to your desired URL
                                             } else {
                                                 // Show error
                                                 document.documentElement.innerHTML = "<div class='container mt-5'><div class='alert alert-danger'>" + jsonResponse.message + "</div></div>";

@@ -66,4 +66,4 @@ class Bike extends Model
     {
         return $this->inventoryItems()->where('status', 'available');
     }
-} 
+}  
